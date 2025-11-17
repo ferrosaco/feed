@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Feed de la cocina</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/es6-promise/4.2.8/es6-promise.auto.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/whatwg-fetch/3.6.2/fetch.min.js"></script>
+
+  <style>
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: #000;
+      color: #fff;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+
+    header {
+      background: #E61C29;
+      padding: 20px 30px;
+      font-size: 35px;
+      font-weight: bold;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    #hora {
+      font-size: 23px;
+      font-weight: normal;
+    }
+
+    /* LAYOUT 16:9: izquierda = llegadas, derecha = horarios */
+    .container {
+      display: flex;
+      height: calc(100vh - 90px);
+    }
+
+    .col {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      box-sizing: border-box;
+    }
+
+    /* --- AÑADE ESTAS LÍNEAS AQUÍ --- */
+    #col-llegadas {
+      flex: 0 0 55%; /* No crece, no encoge, base del 65% */
+    }
+
+    #col-horarios {
+      flex: 0 0 45%; /* No crece, no encoge, base del 35% */
+    }
+    /* --- FIN DE LAS LÍNEAS A AÑADIR --- */
+
+    .titulo-col {
+      font-size: 30px;
+      margin-bottom: 15px;
+      border-bottom: 2px solid #ffffff;
+      padding-bottom: 5px;
+    }
+
+    .linea {
+      padding: 15px;
+      border-radius: 10px;
+      margin-bottom: 25px;
+    }
+
+    .linea h2 {
+      margin: 0 0 10px;
+      font-size: 28px;
+      font-weight: bold;
+    }
+
+    .bus {
+      font-size: 22px;
+      margin-bottom: 6px;
+    }
+
+    /* Cajitas de horarios */
+    .horarios-lista {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .horario-caja {
+      background: #111;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 22px;
+      border: 1px solid #444;
+      min-width: 80px;
+
+      
+
+      text-align: center;
+    }
+  </style>
+</head>
+
+<body>
+
+  <header>
+    <div>Adormideras en directo</div>
+    <div id="hora"></div>
+  </header>
+
+  <div class="container">
+    <div class="col" id="col-llegadas">
+      <div class="titulo-col" id="titulo-llegadas">Llegadas</div>
+      <div id="contenedor"></div>
+    </div>
+
+    <div class="col" id="col-horarios">
+      <div class="titulo-col" id="titulo-horarios">Horarios de hoy</div>
+      <div id="horarios"></div>
+    </div>
+  </div>
+
+  
+</body>
+
+<!-- ===================================================== -->
+<!-- BANDA INFERIOR: lluvia + noticias -->
+<!-- ===================================================== -->
+<style>
+/* Banda inferior fija */
+#banda-inferior {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 55px;
+    display: flex;
+    align-items: center;
+    padding: 0 0px;
+    box-sizing: border-box;
+    z-index: 10000;
+    overflow: hidden;
+    color: #fff;
+    font-size: 28px;
+}
+
+#banda-lluvia {
+    flex: 0 0 auto;   /* no crece ni se encoge */
+    background: #121212;
+    margin-right: 0px;
+    height: 55px;  /* Añade altura explícita */
+    width: 300px;
+    white-space: nowrap;
+    align: center;  /* Centra verticalmente */
+    align-content: center;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#banda-noticias {
+  flex-grow: 1;
+  overflow: hidden;
+  position: relative;
+  white-space: nowrap;
+  background: #E61C29;
+  height: 55px;  /* Añade altura explícita */
+  display: flex;
+  align-items: center;  /* Centra verticalmente */
+  align: center;  /* Centra verticalmente */
+    align-content: center;
+    text-align: center;
+}
+
+#ticker-inner {
+  position: absolute;
+  white-space: nowrap;
+  display: inline-flex;
+  gap: 60px;
+  left: 0;
+  top: 50%;  /* Centra verticalmente */
+  transform: translateY(-50%);  /* Centra verticalmente */
+  will-change: transform;
+}
+
+.ticker-item {
+  display: inline-block;
+  white-space: nowrap;
+  font-size: 28px;  /* Asegura tamaño legible */
+  align: center;  /* Centra verticalmente */
+    align-content: center;
+    text-align: center;
+}
+
+
+</style>
+
+<div id="banda-inferior">
+  <div id="banda-lluvia">Cargando lluvia...</div>
+  <div id="banda-noticias">
+    <div id="ticker-inner"></div>
+  </div>
+</div>
+
+
+</html>
+
+<script>
+// ============================
+// CONFIGURACIÓN (sigue igual)
+// ============================
+var NOMBRES_PARADAS = {};
+var LINEA_INFO = {
+    500: { nombre: "Línea 5", color: "#6792bc50" },
+    300: { nombre: "Línea 3", color: "#BE8B0050" },
+    301: { nombre: "Línea 3A", color: "#D3B25550" }
+};
+
+// (Funciones de reloj, formato de hora, etc. van aquí...
+//  Puedes copiar y pegar todas tus funciones auxiliares)
+
+// ============================
+// ¡LA NUEVA LÓGICA DE CARGA!
+// ============================
+
+// 1. Esta es la ÚNICA función que busca datos
+function cargarDatosDelWrapper() {
+    console.log("Llamando al wrapper /api/datos...");
+
+    // ¡Hacemos una sola llamada a nuestra nueva API!
+    // (Usamos la URL relativa, Vercel la entenderá)
+    fetch('/api/datos')
+        .then(function(resp) {
+            if (!resp.ok) { throw new Error("Error del Wrapper"); }
+            return resp.json();
+        })
+        .then(function(data) {
+            console.log("Datos recibidos:", data);
+
+            // --- PARADAS ---
+            // El wrapper nos dio el *texto* de las paradas
+            procesarParadas(data.paradas); 
+
+            // --- LLEGADAS ---
+            // El wrapper nos dio el JSON de llegadas
+            pintarLlegadas(data.llegadas); 
+
+            // --- HORARIOS ---
+            // El wrapper nos dio los 3 JSON de horarios
+            pintarHorarios(data.horarios); 
+
+            // --- CLIMA ---
+            pintarClima(data.clima);
+
+            // --- NOTICIAS ---
+            pintarNoticias(data.noticias);
+        })
+        .catch(function(err) {
+            console.error("Falló la carga de datos del wrapper:", err);
+            // Aquí podrías mostrar un error en pantalla
+        });
+}
+
+// ============================
+// FUNCIONES PARA "PINTAR"
+// ============================
+//
+// Ahora, tienes que coger tu código antiguo y separarlo
+// en funciones que solo "pinten" los datos.
+//
+// ============================
+
+function procesarParadas(textoParadas) {
+    // Esta función coge el texto y rellena NOMBRES_PARADAS
+    // (Es el mismo código de tu función 'cargarParadas' original)
+    try {
+        var regex = /\{[^{}]*"id":[0-9]+,"nombre":"[^"]+"[^{}]*\}/g;
+        var matches = textoParadas.match(regex);
+        NOMBRES_PARADAS = {};
+        if (matches) {
+            matches.forEach(function(s) {
+                var obj = JSON.parse(s);
+                NOMBRES_PARADAS[obj.id] = obj.nombre;
+            });
+        }
+        console.log("Paradas procesadas:", Object.keys(NOMBRES_PARADAS).length);
+    } catch (e) {
+        console.error("Error procesando paradas:", e);
+    }
+}
+
+function pintarLlegadas(dataLlegadas) {
+    // Pega aquí tu lógica de 'cargarDatosTiempoReal'
+    // pero solo la parte que crea los divs (desde 'cont.innerHTML = ""')
+    // Ya no necesitas hacer 'fetch' aquí.
+    // ¡OJO! Asegúrate de que 'procesarParadas' se haya ejecutado primero.
+    console.log("Pintando llegadas...");
+    var cont = document.getElementById("contenedor");
+    cont.innerHTML = "";
+    // ... (Pega tu código de 'lineas.forEach' aquí) ...
+    // Ejemplo:
+    // dataLlegadas.buses.lineas.forEach(function(linea) { ... });
+}
+
+function pintarHorarios(dataHorarios) {
+    // Pega aquí tu lógica de 'cargarHorarios'
+    // Ya no necesitas 'obtenerHorariosLinea' ni 'fetch'
+    console.log("Pintando horarios...");
+    var cont = document.getElementById("horarios");
+    cont.innerHTML = "";
+
+    // Ejemplo para la línea 5:
+    var info5 = dataHorarios.linea5.servicios ? dataHorarios.linea5.servicios[0] : null;
+    if (info5) {
+         // ... (Pega tu código para pintar los horarios de la L5) ...
+    }
+
+    // Ejemplo para la línea 3:
+    var info3 = dataHorarios.linea3.servicios ? dataHorarios.linea3.servicios[0] : null;
+    if (info3) {
+         // ... (Pega tu código para pintar los horarios de la L3) ...
+    }
+
+    // ... (etc. para la 3A) ...
+}
+
+function pintarClima(dataClima) {
+    // Pega aquí tu lógica de 'renderBandaCompleta'
+    // solo la parte que actualiza 'banda-lluvia'
+    console.log("Pintando clima...");
+    // ... (Pega tu código de procesar la lluvia aquí) ...
+}
+
+function pintarNoticias(dataNoticias) {
+    // Pega aquí tu lógica de 'renderBandaCompleta'
+    // solo la parte que rellena el 'ticker-inner' y lanza la animación
+    console.log("Pintando noticias...");
+    // ... (Pega tu código de rellenar noticias aquí) ...
+    // ... y al final, llama a iniciarTickerNoticias() ...
+}
+
+// ============================
+// INICIALIZACIÓN
+// ============================
+
+// Copia aquí el resto de funciones que te falten:
+// - actualizarReloj, activarModoClaro, activarModoOscuro
+// - formatearHora, horaActualInt, quitarAlpha
+// - aplicarModoClaroOscuro
+// - iniciarTickerNoticias
+
+// Iniciar el reloj (ejemplo)
+// setInterval(actualizarReloj, 1000);
+// actualizarReloj();
+
+// Carga inicial de datos
+document.addEventListener("DOMContentLoaded", function() {
+    cargarDatosDelWrapper();
+
+    // Refrescar los datos cada 60 segundos
+    setInterval(cargarDatosDelWrapper, 60000); 
+});
+
+</script>
