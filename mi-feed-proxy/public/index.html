@@ -207,7 +207,7 @@
 
 <script>
 // ============================
-// CONFIGURACIÓN (sigue igual)
+// CONFIGURACIÓN GLOBAL
 // ============================
 var NOMBRES_PARADAS = {};
 var LINEA_INFO = {
@@ -215,68 +215,86 @@ var LINEA_INFO = {
     300: { nombre: "Línea 3", color: "#BE8B0050" },
     301: { nombre: "Línea 3A", color: "#D3B25550" }
 };
+var animacionActiva = null; // Para el ticker de noticias
 
-// (Funciones de reloj, formato de hora, etc. van aquí...
-//  Puedes copiar y pegar todas tus funciones auxiliares)
 
 // ============================
-// ¡LA NUEVA LÓGICA DE CARGA!
+// FUNCIÓN DE CARGA PRINCIPAL
 // ============================
 
-// 1. Esta es la ÚNICA función que busca datos
 function cargarDatosDelWrapper() {
     console.log("Llamando al wrapper /api/datos...");
-
-    // ¡Hacemos una sola llamada a nuestra nueva API!
-    // (Usamos la URL relativa, Vercel la entenderá)
+    
     fetch('/api/datos')
         .then(function(resp) {
-            if (!resp.ok) { throw new Error("Error del Wrapper"); }
+            if (!resp.ok) { 
+                throw new Error("Error del Wrapper: " + resp.status); 
+            }
             return resp.json();
         })
         .then(function(data) {
             console.log("Datos recibidos:", data);
 
-            // --- PARADAS ---
-            // El wrapper nos dio el *texto* de las paradas
-            procesarParadas(data.paradas); 
+            // --- REPARTIR DATOS A LAS FUNCIONES DE PINTADO ---
+            // Comprobamos que los datos no sean 'null' (por si una API falló)
 
-            // --- LLEGADAS ---
-            // El wrapper nos dio el JSON de llegadas
-            pintarLlegadas(data.llegadas); 
+            if (data.paradas) {
+                procesarParadas(data.paradas); 
+            } else {
+                console.warn("No se recibieron datos de Paradas.");
+            }
 
-            // --- HORARIOS ---
-            // El wrapper nos dio los 3 JSON de horarios
-            pintarHorarios(data.horarios); 
+            // Damos un pequeño respiro para que NOMBRES_PARADAS se procese
+            // antes de intentar pintar las llegadas que dependen de ello.
+            setTimeout(function() {
+                if (data.llegadas) {
+                    pintarLlegadas(data.llegadas); 
+                } else {
+                    console.warn("No se recibieron datos de Llegadas.");
+                    document.getElementById("contenedor").innerHTML = '<p style="color:white;font-size:24px;">Error al cargar llegadas.</p>';
+                }
+            }, 100); // 100ms de retraso
 
-            // --- CLIMA ---
-            pintarClima(data.clima);
+            if (data.horarios) {
+                pintarHorarios(data.horarios); 
+            } else {
+                console.warn("No se recibieron datos de Horarios.");
+                document.getElementById("horarios").innerHTML = '<p style="color:white;font-size:24px;">Error al cargar horarios.</p>';
+            }
+            
+            if (data.clima) {
+                pintarClima(data.clima);
+            } else {
+                console.warn("No se recibieron datos de Clima.");
+            }
 
-            // --- NOTICIAS ---
-            pintarNoticias(data.noticias);
+            if (data.noticias && data.noticias.items) {
+                pintarNoticias(data.noticias);
+            } else {
+                console.warn("No se recibieron datos de Noticias.");
+            }
         })
         .catch(function(err) {
             console.error("Falló la carga de datos del wrapper:", err);
-            // Aquí podrías mostrar un error en pantalla
+            // Mostrar error genérico si todo falla
+            document.getElementById("contenedor").innerHTML = '<p style="color:white;font-size:24px;">No se pudo conectar con el servidor.</p>';
+            document.getElementById("horarios").innerHTML = '';
+
         });
 }
 
+
 // ============================
-// FUNCIONES PARA "PINTAR"
-// ============================
-//
-// Ahora, tienes que coger tu código antiguo y separarlo
-// en funciones que solo "pinten" los datos.
-//
+// FUNCIONES PARA "PROCESAR" Y "PINTAR"
+// (Estas eran las que estaban vacías)
 // ============================
 
 function procesarParadas(textoParadas) {
-    // Esta función coge el texto y rellena NOMBRES_PARADAS
-    // (Es el mismo código de tu función 'cargarParadas' original)
+    console.log("Procesando paradas...");
     try {
         var regex = /\{[^{}]*"id":[0-9]+,"nombre":"[^"]+"[^{}]*\}/g;
         var matches = textoParadas.match(regex);
-        NOMBRES_PARADAS = {};
+        NOMBRES_PARADAS = {}; // Limpiar caché anterior
         if (matches) {
             matches.forEach(function(s) {
                 var obj = JSON.parse(s);
@@ -290,73 +308,372 @@ function procesarParadas(textoParadas) {
 }
 
 function pintarLlegadas(dataLlegadas) {
-    // Pega aquí tu lógica de 'cargarDatosTiempoReal'
-    // pero solo la parte que crea los divs (desde 'cont.innerHTML = ""')
-    // Ya no necesitas hacer 'fetch' aquí.
-    // ¡OJO! Asegúrate de que 'procesarParadas' se haya ejecutado primero.
     console.log("Pintando llegadas...");
     var cont = document.getElementById("contenedor");
-    cont.innerHTML = "";
-    // ... (Pega tu código de 'lineas.forEach' aquí) ...
-    // Ejemplo:
-    // dataLlegadas.buses.lineas.forEach(function(linea) { ... });
+    cont.innerHTML = ""; // Limpiar contenido anterior
+
+    if (!dataLlegadas || !dataLlegadas.buses || !dataLlegadas.buses.lineas) {
+        console.warn("Datos de llegadas incompletos o vacíos.");
+        cont.innerHTML = '<p style="color:white;font-size:24px;">No hay llegadas programadas.</p>';
+        return;
+    }
+
+    var lineas = dataLlegadas.buses.lineas;
+
+    lineas.forEach(function(linea) {
+        var config = LINEA_INFO[linea.linea] || { nombre: "Línea " + linea.linea, color: "#444" };
+        var COLOR_VIVO = {
+            500: "#6792bc",
+            300: "#be8b00",
+            301: "#d3b255"
+        };
+
+        var bloque = document.createElement("div");
+        bloque.style.display = "flex";
+        bloque.style.alignItems = "stretch";
+        bloque.style.marginBottom = "15px";
+        bloque.style.borderRadius = "10px";
+        bloque.style.overflow = "hidden";
+        bloque.style.background = config.color;
+        bloque.style.padding = "0";
+
+        var lineaDiv = document.createElement("div");
+        lineaDiv.textContent = config.nombre.replace("Línea ","");
+        lineaDiv.style.width = "120px";
+        lineaDiv.style.background = COLOR_VIVO[linea.linea] || "#666";
+        lineaDiv.style.color = "#fff";
+        lineaDiv.style.fontSize = "60px";
+        lineaDiv.style.fontWeight = "bold";
+        lineaDiv.style.display = "flex";
+        lineaDiv.style.alignItems = "center";
+        lineaDiv.style.justifyContent = "center";
+        lineaDiv.style.flexShrink = "0";
+
+        bloque.appendChild(lineaDiv);
+
+        var llegadasDiv = document.createElement("div");
+        llegadasDiv.style.display = "flex";
+        llegadasDiv.style.flexDirection = "column";
+        llegadasDiv.style.gap = "8px";
+        llegadasDiv.style.padding = "10px";
+        llegadasDiv.style.flexGrow = "1";
+        llegadasDiv.style.background = config.color;
+
+        linea.buses.forEach(function(bus) {
+            var elem = document.createElement("div");
+            elem.style.display = "flex";
+            elem.style.alignItems = "center";
+            elem.style.gap = "8px";
+
+            var minutos = document.createElement("span");
+            minutos.textContent = (bus.tiempo === "0" || bus.tiempo === 0) ? "En la parada" : bus.tiempo + " min";
+            minutos.style.fontWeight = "bold";
+            minutos.style.fontSize = "38px";
+            minutos.style.whiteSpace = "nowrap"; 
+            minutos.style.flexShrink = "0";
+
+            var nombreParada = document.createElement("span");
+            var ultima = NOMBRES_PARADAS[bus.ult_parada]; // Usar el diccionario global
+            if (ultima) {
+                nombreParada.textContent = "· " + ultima;
+                nombreParada.style.fontStyle = "italic";
+                nombreParada.style.fontWeight = "300";
+                nombreParada.style.fontSize = "20px";
+                nombreParada.style.whiteSpace = "nowrap";
+                nombreParada.style.overflow = "hidden";
+                nombreParada.style.textOverflow = "ellipsis";
+                nombreParada.style.minWidth = "0"; 
+            }
+
+            elem.appendChild(minutos);
+            elem.appendChild(nombreParada);
+            llegadasDiv.appendChild(elem);
+        });
+
+        bloque.appendChild(llegadasDiv);
+        cont.appendChild(bloque);
+    });
 }
 
 function pintarHorarios(dataHorarios) {
-    // Pega aquí tu lógica de 'cargarHorarios'
-    // Ya no necesitas 'obtenerHorariosLinea' ni 'fetch'
     console.log("Pintando horarios...");
     var cont = document.getElementById("horarios");
-    cont.innerHTML = "";
+    cont.innerHTML = ""; // Limpiar horarios anteriores
 
-    // Ejemplo para la línea 5:
-    var info5 = dataHorarios.linea5.servicios ? dataHorarios.linea5.servicios[0] : null;
-    if (info5) {
-         // ... (Pega tu código para pintar los horarios de la L5) ...
+    var ahora = horaActualInt();
+    
+    // --- LÍNEA 5 (SALIDAS) ---
+    var info5 = dataHorarios.linea5 && dataHorarios.linea5.servicios ? dataHorarios.linea5.servicios[0] : null;
+    if (info5 && info5.ida) {
+        var futuros5 = info5.ida
+            .filter(function(h) { return h > ahora; })
+            .slice(0, 8);
+        
+        var config5 = LINEA_INFO[500];
+        var div5 = document.createElement("div");
+        div5.className = "linea";
+        div5.style.background = "#6792bc";
+        div5.innerHTML = "<h2>" + config5.nombre + " — Horarios de ida</h2>";
+        
+        var lista5 = document.createElement("div");
+        lista5.className = "horarios-lista";
+        
+        pintarCajasHorario(lista5, futuros5, config5);
+        div5.appendChild(lista5);
+        cont.appendChild(div5);
     }
 
-    // Ejemplo para la línea 3:
-    var info3 = dataHorarios.linea3.servicios ? dataHorarios.linea3.servicios[0] : null;
-    if (info3) {
-         // ... (Pega tu código para pintar los horarios de la L3) ...
+    // --- LÍNEA 3 (LLEGADAS) ---
+    var info3 = dataHorarios.linea3 && dataHorarios.linea3.servicios ? dataHorarios.linea3.servicios[0] : null;
+    if (info3 && info3.vuelta) {
+        var futuros3 = info3.vuelta
+            .filter(function(h) { return h > ahora; })
+            .slice(0, 8);
+        
+        var config3 = LINEA_INFO[300];
+        var div3 = document.createElement("div");
+        div3.className = "linea";
+        div3.style.background = quitarAlpha(config3.color);
+        div3.innerHTML = "<h2>" + config3.nombre + " — Horarios de vuelta</h2>";
+        
+        var lista3 = document.createElement("div");
+        lista3.className = "horarios-lista";
+        
+        pintarCajasHorario(lista3, futuros3, config3);
+        div3.appendChild(lista3);
+        cont.appendChild(div3);
     }
-
-    // ... (etc. para la 3A) ...
+    
+    // --- LÍNEA 3A (LLEGADAS) ---
+    var info3A = dataHorarios.linea3A && dataHorarios.linea3A.servicios ? dataHorarios.linea3A.servicios[0] : null;
+    if (info3A && info3A.vuelta) {
+        var futuros3A = info3A.vuelta
+            .filter(function(h) { return h > ahora; })
+            .slice(0, 8);
+        
+        var config3A = LINEA_INFO[301];
+        var div3A = document.createElement("div");
+        div3A.className = "linea";
+        div3A.style.background = quitarAlpha(config3A.color);
+        div3A.innerHTML = "<h2>" + config3A.nombre + " — Horarios de vuelta</h2>";
+        
+        var lista3A = document.createElement("div");
+        lista3A.className = "horarios-lista";
+        
+        pintarCajasHorario(lista3A, futuros3A, config3A);
+        div3A.appendChild(lista3A);
+        cont.appendChild(div3A);
+    }
 }
 
 function pintarClima(dataClima) {
-    // Pega aquí tu lógica de 'renderBandaCompleta'
-    // solo la parte que actualiza 'banda-lluvia'
     console.log("Pintando clima...");
-    // ... (Pega tu código de procesar la lluvia aquí) ...
+    var bandaLluvia = document.getElementById("banda-lluvia");
+    var ahora = new Date();
+    var textoLluvia = '<span style="font-size: 40px; margin-right: 8px;">☀</span> Sin lluvias';
+
+    if (!dataClima || !dataClima.hourly || !dataClima.hourly.time) {
+        bandaLluvia.innerHTML = textoLluvia; // Mostrar sol por defecto
+        return;
+    }
+    
+    var tiempos = dataClima.hourly.time;
+    var pops = dataClima.hourly.precipitation_probability;
+    var lista = tiempos.map(function(t, i) {
+        return { hora: new Date(t), pop: pops[i] };
+    });
+
+    for (var i = 0; i < lista.length; i++) {
+        var item = lista[i];
+        if (item.pop >= 40) {
+            var lluviaHora = item.hora;
+            var diffMs = lluviaHora - ahora;
+            var diffHoras = diffMs / (1000 * 60 * 60);
+            var diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+            if (diffHoras < 0) continue;
+            if (diffDias > 5) continue;
+
+            if (diffHoras >= 0 && diffHoras <= 6) {
+                textoLluvia = '<span style="font-size: 40px; margin-right: 8px;">⛆</span> Lluvia en ' + Math.ceil(diffHoras) + ' hora' + (Math.ceil(diffHoras) > 1 ? 's' : '');
+            } 
+            else if (lluviaHora.getDate() === ahora.getDate()) {
+                textoLluvia = '<span style="font-size: 40px; margin-right: 8px;">⛆</span> Lluvia a las ' + lluviaHora.getHours().toString().padStart(2,"0") + ':00';
+            }
+            else if (diffDias === 1 || (ahora.getHours() < 4 && lluviaHora.getDate() === ahora.getDate())) {
+                textoLluvia = '<span style="font-size: 40px; margin-right: 8px;">⛆</span> Lluvia mañana';
+            }
+            else if (diffDias > 1 && diffDias <= 5) {
+                var diasSemana = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+                textoLluvia = '<span style="font-size: 40px; margin-right: 8px;">⛆</span> Lluvia el ' + diasSemana[lluviaHora.getDay()];
+            }
+            break;
+        }
+    }
+    bandaLluvia.innerHTML = textoLluvia;
 }
 
 function pintarNoticias(dataNoticias) {
-    // Pega aquí tu lógica de 'renderBandaCompleta'
-    // solo la parte que rellena el 'ticker-inner' y lanza la animación
     console.log("Pintando noticias...");
-    // ... (Pega tu código de rellenar noticias aquí) ...
-    // ... y al final, llama a iniciarTickerNoticias() ...
+    var inner = document.getElementById("ticker-inner");
+    if (!inner) return;
+
+    inner.innerHTML = ""; // Limpiar ticker
+
+    var noticias = dataNoticias.items.slice(0, 10).map(function(item) {
+        return item.title;
+    });
+
+    var crearItems = function() {
+        noticias.forEach(function(titulo, i) {
+            var span = document.createElement("span");
+            span.className = "ticker-item";
+            span.textContent = titulo;
+            inner.appendChild(span);
+        });
+    };
+
+    crearItems(); // Primera copia
+    crearItems(); // Segunda copia
+
+    if (animacionActiva) {
+        try { cancelAnimationFrame(animacionActiva); } catch(e) {}
+        animacionActiva = null;
+    }
+    
+    setTimeout(function() {
+        iniciarTickerNoticias();
+    }, 200); // Esperar a que el DOM se pinte
 }
 
+
 // ============================
-// INICIALIZACIÓN
+// FUNCIONES AUXILIARES
+// (Copiadas de tu script original)
 // ============================
 
-// Copia aquí el resto de funciones que te falten:
-// - actualizarReloj, activarModoClaro, activarModoOscuro
-// - formatearHora, horaActualInt, quitarAlpha
-// - aplicarModoClaroOscuro
-// - iniciarTickerNoticias
+// --- Para Reloj y Modo Oscuro ---
 
-// Iniciar el reloj (ejemplo)
-// setInterval(actualizarReloj, 1000);
-// actualizarReloj();
+function actualizarReloj() {
+    var ahora = new Date();
+    var fecha = ahora.toLocaleDateString("es-ES", {
+        weekday: "long",
+        month: "long",
+        day: "numeric"
+    });
+    var hora = ahora.toLocaleTimeString("es-ES", { hour12: false });
 
-// Carga inicial de datos
+    var elem = document.getElementById("hora");
+    if (elem) {
+        elem.innerHTML = fecha + " — " + hora;
+    }
+}
+
+function aplicarModoClaroOscuro() {
+    var ahora = new Date();
+    var hora = ahora.getHours();
+    var llegadaTitulo = document.getElementById("titulo-llegadas");
+    var horariosTitulo = document.getElementById("titulo-horarios");
+
+    if (hora >= 10 && hora < 18) {
+        document.body.style.background = "#764e50";
+    } else {
+        document.body.style.background = "#764e50";
+    }
+    // Estos colores eran iguales, los dejo como en tu original
+    if (llegadaTitulo) llegadaTitulo.style.color = "#ffffff";
+    if (horariosTitulo) horariosTitulo.style.color = "#ffffff";
+}
+
+// --- Para Horarios ---
+
+function pintarCajasHorario(lista, futuros, config) {
+    // Función de ayuda para no repetir código en 'pintarHorarios'
+    if (futuros.length === 0) {
+        var sinBuses = document.createElement("div");
+        sinBuses.textContent = "Ya no quedan autobuses.";
+        sinBuses.style.fontSize = "24px";
+        sinBuses.style.color = "#ffffff";
+        sinBuses.style.padding = "10px";
+        lista.appendChild(sinBuses);
+    } else {
+        futuros.forEach(function(h) {
+            var caja = document.createElement("div");
+            caja.className = "horario-caja";
+            caja.textContent = formatearHora(h);
+            caja.style.background = config.color;
+            caja.style.color = "#ffffff";
+            lista.appendChild(caja);
+        });
+    }
+}
+
+function formatearHora(num) {
+    var s = String(num).padStart(4, "0");
+    return s.slice(0,2) + ":" + s.slice(2);
+}
+
+function horaActualInt() {
+    var d = new Date();
+    return d.getHours() * 100 + d.getMinutes();
+}
+
+function quitarAlpha(color) {
+    return color.length === 9 ? color.slice(0, 7) : color;
+}
+
+// --- Para Ticker de Noticias ---
+
+function iniciarTickerNoticias() {
+    var inner = document.getElementById("ticker-inner");
+    if (!inner || inner.scrollWidth <= inner.clientWidth) return; // No animar si no hay desborde
+
+    var anchoMitad = inner.scrollWidth / 2;
+    var x = 0;
+    var velocidad = 1.5;
+
+    // Polyfill para requestAnimationFrame para navegadores antiguos
+    var raf = window.requestAnimationFrame || window.mozRequestAnimationFrame ||
+              window.webkitRequestAnimationFrame || window.msRequestAnimationFrame ||
+              function(cb) { return window.setTimeout(cb, 1000/60); };
+    
+    var caf = window.cancelAnimationFrame || window.mozCancelAnimationFrame ||
+              function(id) { clearTimeout(id); };
+    
+    if (animacionActiva) {
+        caf(animacionActiva); // Cancelar animación anterior si existe
+    }
+
+    function animar() {
+        x -= velocidad;
+        
+        if (Math.abs(x) >= anchoMitad) {
+            x = 0;
+        }
+        
+        inner.style.transform = "translateY(-50%) translateX(" + x + "px)";
+        animacionActiva = raf(animar);
+    }
+
+    animar();
+}
+
+
+// ============================
+// INICIALIZACIÓN Y REFRESCOS
+// ============================
+
+// --- Reloj y Modo Oscuro (se ejecutan siempre) ---
+setInterval(actualizarReloj, 1000);
+actualizarReloj();
+
+aplicarModoClaroOscuro();
+setInterval(aplicarModoClaroOscuro, 60000);
+
+// --- Carga de Datos (al cargar la página) ---
 document.addEventListener("DOMContentLoaded", function() {
     cargarDatosDelWrapper();
-
+    
     // Refrescar los datos cada 60 segundos
     setInterval(cargarDatosDelWrapper, 60000); 
 });
