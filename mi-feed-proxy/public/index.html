@@ -626,9 +626,9 @@ function quitarAlpha(color) {
 
 function iniciarTickerNoticias() {
     var inner = document.getElementById("ticker-inner");
-    if (!inner || inner.scrollWidth <= inner.clientWidth) return; // No animar si no hay desborde
+    if (!inner) return; // Comprobación básica
 
-    var anchoMitad = inner.scrollWidth / 2;
+    var anchoMitad = 0; // Empezar en 0
     var x = 0;
     var velocidad = 1.5;
 
@@ -645,17 +645,33 @@ function iniciarTickerNoticias() {
     }
 
     function animar() {
+        // --- INICIO DE LA SOLUCIÓN ---
+        // Si el ancho aún no se ha calculado, intentamos calcularlo.
+        // Esto espera a que el navegador haya "pintado" el contenido.
+        if (anchoMitad === 0) {
+            anchoMitad = inner.scrollWidth / 2;
+            
+            // Si sigue siendo 0, o si el contenido no es lo bastante ancho
+            // para necesitar scroll, detenemos la animación.
+            if (anchoMitad === 0 || (inner.scrollWidth <= inner.clientWidth)) {
+                anchoMitad = 0; // resetear
+                return; // Detener el bucle de animación
+            }
+        }
+        // --- FIN DE LA SOLUCIÓN ---
+
         x -= velocidad;
         
         if (Math.abs(x) >= anchoMitad) {
-            x = 0;
+            x = 0; // Reiniciar el bucle
         }
         
+        // Mantener el centrado vertical y mover horizontalmente
         inner.style.transform = "translateY(-50%) translateX(" + x + "px)";
         animacionActiva = raf(animar);
     }
 
-    animar();
+    animar(); // Empezar la animación
 }
 
 
