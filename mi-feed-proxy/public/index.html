@@ -267,24 +267,23 @@ function obtenerSiguienteSalidaHHMM(idLinea) {
     if (!key || !CACHE_HORARIOS[key]) return null;
 
     var datosLinea = CACHE_HORARIOS[key];
-    // Asumimos estructura: { servicios: [ { ida: [...], vuelta: [...] } ] }
-    // Normalmente la parada principal (151) suele ser el inicio o fin, revisa si es ida o vuelta.
-    // Por defecto miramos ambos o la estructura que usas en pintarHorarios.
-    
     var servicios = datosLinea.servicios ? datosLinea.servicios[0] : null;
     if (!servicios) return null;
     
-    // Unimos ida y vuelta para buscar la próxima salida global (simplificación)
-    // Ojo: Si la parada 151 es solo de ida, usa solo servicios.ida
-    var todosHorarios = (servicios.ida || []).concat(servicios.vuelta || []);
-    todosHorarios.sort(function(a, b){return a-b}); // Ordenar numéricamente
+    // CORRECCIÓN: Usamos la misma lógica que pintarHorarios (Ida O Vuelta, no ambos)
+    // Esto asegura que la cuenta atrás coincida con lo que ves en la columna derecha.
+    var listaHorarios = servicios.ida || servicios.vuelta;
+    if (!listaHorarios) return null;
+
+    // Aseguramos orden numérico
+    listaHorarios.sort(function(a, b){return a-b}); 
 
     var ahora = horaActualInt();
     
     // Buscar el primer horario estrictamente mayor que ahora
-    for (var i = 0; i < todosHorarios.length; i++) {
-        if (todosHorarios[i] > ahora) {
-            return todosHorarios[i]; // Devuelve 1234 (int)
+    for (var i = 0; i < listaHorarios.length; i++) {
+        if (listaHorarios[i] > ahora) {
+            return listaHorarios[i]; // Devuelve entero, ej: 1253
         }
     }
     return null;
@@ -363,19 +362,17 @@ function pintarLlegadas(dataLlegadas) {
                     elem.appendChild(nombreParada);
                 }
             } else {
-                // === NUEVA LÓGICA: Cuenta atrás para salida ===
+                // === CUENTA ATRÁS PARA SALIDA ===
                 var horaSalida = obtenerSiguienteSalidaHHMM(linea.linea);
                 if (horaSalida) {
                     var spanCuentaAtras = document.createElement("span");
-                    spanCuentaAtras.className = "cuenta-atras-salida"; // Clase para buscarla luego
-                    spanCuentaAtras.setAttribute("data-salida", horaSalida); // Guardamos 1234
-                    spanCuentaAtras.style.color = "#D32F2F"; // Rojo oscuro legible
-                    spanCuentaAtras.style.fontSize = "32px"; // Mismo tamaño que "En la parada"
+                    spanCuentaAtras.className = "cuenta-atras-salida"; 
+                    spanCuentaAtras.setAttribute("data-salida", horaSalida); 
+                    spanCuentaAtras.style.color = "#D32F2F"; 
+                    spanCuentaAtras.style.fontSize = "32px"; 
                     spanCuentaAtras.style.fontWeight = "bold";
                     spanCuentaAtras.style.marginLeft = "5px";
-                    
-                    // Texto inicial (se actualizará en < 1 seg por el intervalo)
-                    spanCuentaAtras.textContent = "· Sale en --:--";
+                    spanCuentaAtras.textContent = ""; // Se llena en <1s
                     
                     elem.appendChild(spanCuentaAtras);
                 }
@@ -387,7 +384,6 @@ function pintarLlegadas(dataLlegadas) {
         cont.appendChild(bloque);
     });
     
-    // Forzamos una actualización inmediata de los relojes
     actualizarCuentasAtrasSalidas();
 }
 
@@ -400,6 +396,7 @@ function pintarHorarios(dataHorarios) {
         if (!datosLinea) return;
         var servicios = datosLinea.servicios ? datosLinea.servicios[0] : null;
         if (!servicios) return;
+        // Aquí se selecciona Ida o Vuelta. Usamos la misma lógica en obtenerSiguienteSalidaHHMM
         var horarios = servicios.ida || servicios.vuelta;
         if (!horarios) return;
 
@@ -468,7 +465,7 @@ function pintarClima(dataClima) {
     bandaLluvia.innerHTML = htmlFinal;
 }
 
-// Nueva función llamada cada segundo para mover los segunderos rojos
+// Nueva función llamada cada segundo
 function actualizarCuentasAtrasSalidas() {
     var elementos = document.querySelectorAll(".cuenta-atras-salida");
     if (elementos.length === 0) return;
@@ -477,17 +474,18 @@ function actualizarCuentasAtrasSalidas() {
     
     for (var i = 0; i < elementos.length; i++) {
         var el = elementos[i];
-        var hhmm = el.getAttribute("data-salida"); // "1234"
-        if (!hhmm) continue;
+        var rawHHMM = el.getAttribute("data-salida"); // Ej: "930" o "1253"
+        if (!rawHHMM) continue;
 
-        // Crear objeto fecha objetivo
+        // CORRECCIÓN: Padding para asegurar 4 dígitos (ej "930" -> "0930")
+        var hhmm = pad(rawHHMM, 4, '0');
+
         var h = parseInt(hhmm.substring(0, 2), 10);
         var m = parseInt(hhmm.substring(2), 10);
         
         var fechaSalida = new Date();
-        fechaSalida.setHours(h, m, 0, 0); // Hora del horario de hoy
+        fechaSalida.setHours(h, m, 0, 0);
 
-        // Calcular diferencia en ms
         var diff = fechaSalida - ahora;
 
         if (diff > 0) {
@@ -510,7 +508,7 @@ function actualizarReloj() {
         elem.innerHTML = fecha + " — <b>" + hora + "</b>";
     }
     
-    // Actualizamos los contadores rojos cada segundo también
+    // Actualizamos los contadores rojos cada segundo
     actualizarCuentasAtrasSalidas();
 }
 
