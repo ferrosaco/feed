@@ -62,8 +62,7 @@ module.exports = async (req, res) => {
         //    Guardamos en caché el resultado por 60 segundos (s-maxage=60).
         //    Esto soluciona tu problema de "límite de peticiones".
         //    Aunque refresques 10 veces, Vercel solo llamará a itranvias 1 vez por minuto.
-        res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate');
-
+        res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate');
         // 2. Política de CORS:
         //    Permitimos que cualquier dominio (incluido tu github.io) llame a esta API.
         //    Esto soluciona tu problema de "CORS".
