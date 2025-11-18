@@ -27,7 +27,7 @@
 
     #hora {
       font-size: 22px;
-      font-weight: normal;
+      font-weight: normal; /* La base es normal, la negrita se pone por JS */
     }
 
     .container {
@@ -192,7 +192,6 @@ var proximaActualizacion = 0;
 // ============================
 
 function cargarDatosDelWrapper() {
-    // Solo cargamos si la página está visible (Ahorro energía)
     if (document.hidden) {
         console.log("Pantalla oculta: saltando actualización.");
         return;
@@ -347,14 +346,15 @@ function pintarClima(dataClima) {
     var bandaLluvia = document.getElementById("banda-lluvia");
     var ahora = new Date();
     
-    // Estilos para alinear emoji y texto al centro (vertical-align: middle)
-    var estiloEmoji = 'font-size: 32px; margin-right: 10px; vertical-align: middle;';
-    var estiloTexto = 'vertical-align: middle;';
+    // === AJUSTE PARA IPAD VIEJO ===
+    // Aumentamos mucho el tamaño (46px) y lo bajamos a la fuerza (top: 8px)
+    // 'line-height: 1' evita que estire la barra negra
+    var estiloEmoji = 'font-size: 46px; margin-right: 12px; position: relative; top: 8px; line-height: 1; display: inline-block;';
+    var estiloTexto = 'vertical-align: middle; position: relative; top: 0px;'; // Texto normal
 
     var sol = '<span style="' + estiloEmoji + '">☀️</span>';
     var lluvia = '<span style="' + estiloEmoji + '">🌧️</span>';
     
-    // Valor por defecto:
     var htmlFinal = sol + '<span style="' + estiloTexto + '">Sin lluvias</span>';
 
     if (dataClima && dataClima.hourly) {
@@ -374,7 +374,6 @@ function pintarClima(dataClima) {
                      mensaje = 'Lluvia a las ' + pad(fechaItem.getHours(),2) + ':00';
                 else mensaje = 'Lluvia mañana';
                 
-                // Construimos el HTML alineado
                 htmlFinal = lluvia + '<span style="' + estiloTexto + '">' + mensaje + '</span>';
                 break;
             }
@@ -387,8 +386,12 @@ function actualizarReloj() {
     var ahora = new Date();
     var fecha = ahora.toLocaleDateString("es-ES", { weekday: "long", month: "long", day: "numeric" });
     var hora = pad(ahora.getHours(), 2) + ":" + pad(ahora.getMinutes(), 2) + ":" + pad(ahora.getSeconds(), 2);
+    
     var elem = document.getElementById("hora");
-    if (elem) elem.innerHTML = fecha + " — " + hora;
+    if (elem) {
+        // === HORA EN NEGRITA ===
+        elem.innerHTML = fecha + " — <b>" + hora + "</b>";
+    }
 }
 
 function actualizarCuentaAtras() {
@@ -435,10 +438,8 @@ actualizarReloj();
 document.addEventListener("DOMContentLoaded", function() {
     cargarDatosDelWrapper();
     
-    // Carga cada 30 segundos, pero respetando si la pantalla está apagada
     setInterval(cargarDatosDelWrapper, 30000); 
     
-    // Detectar cuando el usuario vuelve a la pestaña
     document.addEventListener("visibilitychange", function() {
         if (!document.hidden) {
             console.log("Pestaña visible: Forzando actualización.");
