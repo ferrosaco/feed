@@ -209,21 +209,21 @@ function pad(str, len, char) {
 // ============================
 var NOMBRES_PARADAS = {};
 
-// Mapeo para conectar el ID de la línea en llegadas con la propiedad en el JSON de horarios
 var MAPA_HORARIOS = {
     500: "linea5",
     300: "linea3",
     301: "linea3A"
 };
 
+// AQUI definimos qué horario usar para cada línea
 var LINEA_INFO = {
-    500: { nombre: "Línea 5",  vivo: "#6792bc", pastel: "#e1e9f2" },
-    300: { nombre: "Línea 3",  vivo: "#be8b00", pastel: "#f2e9cf" },
-    301: { nombre: "Línea 3A", vivo: "#d3b255", pastel: "#f6f0dd" }
+    500: { nombre: "Línea 5",  vivo: "#6792bc", pastel: "#e1e9f2", sentido: "ida"    },
+    300: { nombre: "Línea 3",  vivo: "#be8b00", pastel: "#f2e9cf", sentido: "vuelta" },
+    301: { nombre: "Línea 3A", vivo: "#d3b255", pastel: "#f6f0dd", sentido: "vuelta" }
 };
 
 var proximaActualizacion = 0;
-var CACHE_HORARIOS = null; // Guardaremos aquí los horarios para usarlos en llegadas
+var CACHE_HORARIOS = null; 
 
 // ============================
 // LOGICA
@@ -241,7 +241,6 @@ function cargarDatosDelWrapper() {
     fetch('/api/datos?t=' + new Date().getTime())
         .then(function(resp) { return resp.json(); })
         .then(function(data) {
-            // 1. Guardamos horarios en global antes de pintar nada
             if (data.horarios) {
                 CACHE_HORARIOS = data.horarios;
                 pintarHorarios(data.horarios); 
@@ -249,7 +248,6 @@ function cargarDatosDelWrapper() {
 
             if (data.paradas) procesarParadas(data.paradas);
             
-            // 2. Pintamos llegadas (ahora usará CACHE_HORARIOS internamente)
             setTimeout(function() {
                 if (data.llegadas) pintarLlegadas(data.llegadas);
             }, 50);
@@ -259,7 +257,6 @@ function cargarDatosDelWrapper() {
         .catch(function(err) { console.error(err); });
 }
 
-// Función auxiliar para buscar a qué hora sale el bus que está en la parada
 function obtenerSiguienteSalidaHHMM(idLinea) {
     if (!CACHE_HORARIOS) return null;
     
@@ -270,20 +267,21 @@ function obtenerSiguienteSalidaHHMM(idLinea) {
     var servicios = datosLinea.servicios ? datosLinea.servicios[0] : null;
     if (!servicios) return null;
     
-    // CORRECCIÓN: Usamos la misma lógica que pintarHorarios (Ida O Vuelta, no ambos)
-    // Esto asegura que la cuenta atrás coincida con lo que ves en la columna derecha.
-    var listaHorarios = servicios.ida || servicios.vuelta;
+    // 1. Miramos la configuración para saber si usar Ida o Vuelta
+    var config = LINEA_INFO[idLinea];
+    var sentido = (config && config.sentido) ? config.sentido : "ida";
+
+    // 2. Seleccionamos la lista correcta
+    var listaHorarios = servicios[sentido];
     if (!listaHorarios) return null;
 
-    // Aseguramos orden numérico
     listaHorarios.sort(function(a, b){return a-b}); 
 
     var ahora = horaActualInt();
     
-    // Buscar el primer horario estrictamente mayor que ahora
     for (var i = 0; i < listaHorarios.length; i++) {
         if (listaHorarios[i] > ahora) {
-            return listaHorarios[i]; // Devuelve entero, ej: 1253
+            return listaHorarios[i]; 
         }
     }
     return null;
@@ -362,7 +360,6 @@ function pintarLlegadas(dataLlegadas) {
                     elem.appendChild(nombreParada);
                 }
             } else {
-                // === CUENTA ATRÁS PARA SALIDA ===
                 var horaSalida = obtenerSiguienteSalidaHHMM(linea.linea);
                 if (horaSalida) {
                     var spanCuentaAtras = document.createElement("span");
@@ -372,8 +369,7 @@ function pintarLlegadas(dataLlegadas) {
                     spanCuentaAtras.style.fontSize = "32px"; 
                     spanCuentaAtras.style.fontWeight = "bold";
                     spanCuentaAtras.style.marginLeft = "5px";
-                    spanCuentaAtras.textContent = ""; // Se llena en <1s
-                    
+                    spanCuentaAtras.textContent = ""; 
                     elem.appendChild(spanCuentaAtras);
                 }
             }
@@ -396,8 +392,11 @@ function pintarHorarios(dataHorarios) {
         if (!datosLinea) return;
         var servicios = datosLinea.servicios ? datosLinea.servicios[0] : null;
         if (!servicios) return;
-        // Aquí se selecciona Ida o Vuelta. Usamos la misma lógica en obtenerSiguienteSalidaHHMM
-        var horarios = servicios.ida || servicios.vuelta;
+
+        // Usamos el mismo sentido que en la configuración
+        var sentido = config.sentido || "ida";
+        var horarios = servicios[sentido];
+        
         if (!horarios) return;
 
         var futuros = horarios.filter(function(h) { return h > ahora; }).slice(0, 8);
@@ -465,7 +464,6 @@ function pintarClima(dataClima) {
     bandaLluvia.innerHTML = htmlFinal;
 }
 
-// Nueva función llamada cada segundo
 function actualizarCuentasAtrasSalidas() {
     var elementos = document.querySelectorAll(".cuenta-atras-salida");
     if (elementos.length === 0) return;
@@ -474,12 +472,10 @@ function actualizarCuentasAtrasSalidas() {
     
     for (var i = 0; i < elementos.length; i++) {
         var el = elementos[i];
-        var rawHHMM = el.getAttribute("data-salida"); // Ej: "930" o "1253"
+        var rawHHMM = el.getAttribute("data-salida");
         if (!rawHHMM) continue;
 
-        // CORRECCIÓN: Padding para asegurar 4 dígitos (ej "930" -> "0930")
         var hhmm = pad(rawHHMM, 4, '0');
-
         var h = parseInt(hhmm.substring(0, 2), 10);
         var m = parseInt(hhmm.substring(2), 10);
         
@@ -507,8 +503,6 @@ function actualizarReloj() {
     if (elem) {
         elem.innerHTML = fecha + " — <b>" + hora + "</b>";
     }
-    
-    // Actualizamos los contadores rojos cada segundo
     actualizarCuentasAtrasSalidas();
 }
 
