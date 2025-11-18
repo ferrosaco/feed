@@ -119,7 +119,7 @@
     width: 100%;
     height: 50px;
     display: flex;
-    align-items: center;
+    align-items: center; /* Esto centra verticalmente todo */
     z-index: 10000;
     overflow: hidden;
     color: #fff;
@@ -132,10 +132,10 @@
     height: 100%;
     width: 280px;
     display: flex;
-    align-items: center;
+    align-items: center; /* Centrado vertical flex */
     justify-content: center;
     white-space: nowrap;
-    padding: 0 10px;
+    padding: 0 10px; /* Un poco de aire */
 }
 
 #banda-info-derecha {
@@ -153,13 +153,14 @@
     font-size: 24px;
 }
 
+/* Clases para el clima */
 .clima-emoji {
-    font-size: 1.55em; /* AHORA: 25% más grande que antes (1.3 * 1.25 = 1.625, he ajustado a 1.55 por si las moscas) */
+    font-size: 1.3em; /* 30% más grande que el texto, relativo */
     margin-right: 10px;
-    line-height: 1;
+    line-height: 1; /* Evita que estire la altura */
 }
 .clima-texto {
-    /* No hay cambios aquí */
+    /* Sin estilos raros, hereda la alineación flex */
 }
 </style>
 
@@ -350,6 +351,7 @@ function pintarClima(dataClima) {
     var bandaLluvia = document.getElementById("banda-lluvia");
     var ahora = new Date();
     
+    // Usamos clases CSS limpias en lugar de estilos en línea complicados
     var sol = '<span class="clima-emoji">☀️</span>';
     var lluvia = '<span class="clima-emoji">🌧️</span>';
     
