@@ -252,7 +252,7 @@ function cargarDatosDelWrapper() {
 
     // 2. MODO SUEÑO (00:00 a 06:00)
     var horaActual = new Date().getHours();
-    var esHoraDeDormir = (horaActual >= 14 && horaActual < 15);
+    var esHoraDeDormir = (horaActual >= 0 && horaActual < 6);
 
     // Lógica Clave: Si es hora de dormir...
     // PERO solo activamos el bloqueo si YA tenemos los horarios de mañana cargados (!necesitoActualizarHorarios).
@@ -267,7 +267,7 @@ function cargarDatosDelWrapper() {
             cont.innerHTML = `
                 <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:#ffffff; padding: 20px;">
                     <div style="font-size:60px;">😴😴😴😴😴😴😴😴😴</div>
-                    <div style="font-size:24px; margin-top:10px;">¿Qué haces despierto todavía? Mejor vuelve a partir de las 6:00. A esta hora la tablet me toca a mí, y estoy minando criptomonedas.</div>
+                    <div style="font-size:24px; margin-top:10px;">¿Qué haces despierto todavía? Mejor vuelve a partir de las 6:00. A esta hora la tablet me toca a mí, y estoy minando criptomonedas en sueños... Fu.... Mimimimimimi...</div>
                     
                     <div style="font-size:24px; margin-top:30px; width:100%; text-align:right; padding-top:5px;">
                         -- Burry ❤️
