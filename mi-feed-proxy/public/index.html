@@ -41,27 +41,22 @@
       overflow-y: auto;
       overflow-x: hidden;
       box-sizing: border-box;
-    /* TRUCO PARA IPAD VIEJO: */
-      /* Fuerza a la GPU a pintar esta capa, evitando que se quede en blanco */
+      /* TRUCO PARA IPAD VIEJO: Fuerza GPU */
       -webkit-transform: translateZ(0);
       transform: translateZ(0);
     }
 
     /* LAYOUT 60:40 REFORZADO */
     #col-llegadas {
-      /* Flexbox normal */
-      flex: 0 0 59%;
-      /* Redundancia necesaria para iOS 9: */
-      max-width: 59%; 
-      width: 59%; 
+      flex: 0 0 60%;
+      max-width: 60%; 
+      width: 60%; 
     }
 
     #col-horarios {
-      /* Flexbox normal */
-      flex: 0 0 41%;
-      /* Redundancia necesaria para iOS 9: */
-      max-width: 41%;
-      width: 41%;
+      flex: 0 0 40%;
+      max-width: 40%;
+      width: 40%;
     }
 
     .titulo-col {
@@ -86,7 +81,6 @@
     }
 
     .horario-caja {
-      /* CAMBIO 1: Reducido padding lateral de 14px a 6px */
       padding: 10px 6px; 
       border-radius: 8px;
       font-size: 20px;
@@ -198,6 +192,12 @@ var proximaActualizacion = 0;
 // ============================
 
 function cargarDatosDelWrapper() {
+    // Solo cargamos si la página está visible (Ahorro energía)
+    if (document.hidden) {
+        console.log("Pantalla oculta: saltando actualización.");
+        return;
+    }
+
     console.log("Actualizando datos...");
     proximaActualizacion = new Date().getTime() + 30000; 
     
@@ -275,7 +275,7 @@ function pintarLlegadas(dataLlegadas) {
             spanTiempo.style.flexShrink = "0";
             elem.appendChild(spanTiempo);
             
-            // Nombre Parada (Solo si NO está en la parada)
+            // Nombre Parada
             if (!esEnParada) {
                 var nombreParada = document.createElement("span");
                 var ultima = NOMBRES_PARADAS[bus.ult_parada]; 
@@ -284,16 +284,13 @@ function pintarLlegadas(dataLlegadas) {
                     nombreParada.style.fontStyle = "italic";
                     nombreParada.style.fontSize = "18px";
                     nombreParada.style.opacity = "0.8";
-                    
                     nombreParada.style.whiteSpace = "nowrap";
                     nombreParada.style.overflow = "hidden";
                     nombreParada.style.textOverflow = "ellipsis";
                     nombreParada.style.minWidth = "0"; 
-                    
                     elem.appendChild(nombreParada);
                 }
             }
-
             llegadasDiv.appendChild(elem);
         });
 
@@ -349,7 +346,16 @@ function pintarHorarios(dataHorarios) {
 function pintarClima(dataClima) {
     var bandaLluvia = document.getElementById("banda-lluvia");
     var ahora = new Date();
-    var textoLluvia = '<span style="font-size: 32px; margin-right: 8px;">☀️</span> Sin lluvias';
+    
+    // Estilos para alinear emoji y texto al centro (vertical-align: middle)
+    var estiloEmoji = 'font-size: 32px; margin-right: 10px; vertical-align: middle;';
+    var estiloTexto = 'vertical-align: middle;';
+
+    var sol = '<span style="' + estiloEmoji + '">☀️</span>';
+    var lluvia = '<span style="' + estiloEmoji + '">🌧️</span>';
+    
+    // Valor por defecto:
+    var htmlFinal = sol + '<span style="' + estiloTexto + '">Sin lluvias</span>';
 
     if (dataClima && dataClima.hourly) {
         var tiempos = dataClima.hourly.time;
@@ -361,20 +367,20 @@ function pintarClima(dataClima) {
                 var diff = (fechaItem - ahora) / 3600000;
                 if (diff > 120) break;
                 
-                // CAMBIO 2: Emoji nube con lluvia
-                var iconoLluvia = '<span style="font-size: 32px; margin-right: 8px;">🌧️</span>';
-
-                if (diff <= 1) textoLluvia = iconoLluvia + 'Lluvia ahora';
-                else if (diff < 6) textoLluvia = iconoLluvia + 'Lluvia en ' + Math.ceil(diff) + 'h';
+                var mensaje = "";
+                if (diff <= 1) mensaje = 'Lluvia ahora';
+                else if (diff < 6) mensaje = 'Lluvia en ' + Math.ceil(diff) + 'h';
                 else if (fechaItem.getDate() == ahora.getDate()) 
-                     textoLluvia = iconoLluvia + 'Lluvia a las ' + pad(fechaItem.getHours(),2) + ':00';
-                else textoLluvia = iconoLluvia + 'Lluvia mañana';
+                     mensaje = 'Lluvia a las ' + pad(fechaItem.getHours(),2) + ':00';
+                else mensaje = 'Lluvia mañana';
                 
+                // Construimos el HTML alineado
+                htmlFinal = lluvia + '<span style="' + estiloTexto + '">' + mensaje + '</span>';
                 break;
             }
         }
     }
-    bandaLluvia.innerHTML = textoLluvia;
+    bandaLluvia.innerHTML = htmlFinal;
 }
 
 function actualizarReloj() {
@@ -392,7 +398,6 @@ function actualizarCuentaAtras() {
     var faltan = Math.ceil((proximaActualizacion - ahora) / 1000);
     if (faltan < 0) faltan = 0;
     
-    // CAMBIO 3: Frase completa
     div.textContent = "Los datos se actualizarán en " + faltan + " segundos.";
 }
 
@@ -420,12 +425,26 @@ function procesarParadas(textoParadas) {
     } catch (e) {}
 }
 
+// ============================
+// INICIALIZACIÓN
+// ============================
 setInterval(actualizarReloj, 1000);
 setInterval(actualizarCuentaAtras, 1000);
 actualizarReloj();
 
 document.addEventListener("DOMContentLoaded", function() {
     cargarDatosDelWrapper();
+    
+    // Carga cada 30 segundos, pero respetando si la pantalla está apagada
     setInterval(cargarDatosDelWrapper, 30000); 
+    
+    // Detectar cuando el usuario vuelve a la pestaña
+    document.addEventListener("visibilitychange", function() {
+        if (!document.hidden) {
+            console.log("Pestaña visible: Forzando actualización.");
+            actualizarReloj();
+            cargarDatosDelWrapper();
+        }
+    });
 });
 </script>
